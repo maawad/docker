@@ -1,0 +1,37 @@
+FROM ubuntu:latest
+LABEL maintainer="Muhammad Awad <mawad@duck.com>"
+
+# Install required Ubuntu packages
+RUN DEBIAN_FRONTEND=noninteractive apt-get clean && \
+    apt-get update -y -qq && \
+    apt-get install -y --no-install-recommends \
+    wget \
+    git \
+    build-essential \
+    graphviz \
+    python-is-python3 \
+    locales \
+    libboost-dev
+
+# Install ROCm
+RUN wget --no-check-certificate https://repo.radeon.com/amdgpu-install/5.4/ubuntu/jammy/amdgpu-install_5.4.50400-1_all.deb
+RUN apt-get -y install ./amdgpu-install_5.4.50400-1_all.deb
+RUN DEBIAN_FRONTEND=noninteractive amdgpu-install --accept-eula -y --usecase=rocm,hiplibsdk --no-dkms  --allow-unauthenticated
+
+# Set environment variables
+ENV PATH="$PATH:/opt/rocm/bin:/opt/rocm/rocprofiler/bin:/opt/rocm/hip/bin"
+ENV LD_LIBRARY_PATH="/opt/rocm/lib:/opt/rocm/llvm/lib:/opt/rocm/hip/lib"
+
+# Install cmake
+ARG CMAKE_VERSION=3.25.1
+RUN wget https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.sh &&\
+    chmod +x cmake-${CMAKE_VERSION}-linux-x86_64.sh &&\
+    mkdir /opt/cmake && \
+    ./cmake-${CMAKE_VERSION}-linux-x86_64.sh  --skip-license --prefix=/opt/cmake  &&\
+    ln -s /opt/cmake/bin/* /usr/local/bin/
+
+# Set the locale
+RUN locale-gen en_US.UTF-8
+ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US:en \
+    LC_ALL=en_US.UTF-8
