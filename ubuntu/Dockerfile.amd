@@ -1,9 +1,12 @@
 FROM ubuntu:latest
 LABEL maintainer="Muhammad Awad <mawad@duck.com>"
 
+ENV DEBIAN_FRONTEND noninteractive
+
 # Install required Ubuntu packages
-RUN DEBIAN_FRONTEND=noninteractive apt-get clean && \
+RUN apt-get clean && \
     apt-get update -y -qq && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
     wget \
     git \
@@ -11,12 +14,24 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get clean && \
     graphviz \
     python-is-python3 \
     locales \
-    libboost-dev
+    libboost-dev \
+    openssh-client \
+    ca-certificates \
+    gpg
 
 # Install ROCm
-RUN wget --no-check-certificate https://repo.radeon.com/amdgpu-install/5.4/ubuntu/jammy/amdgpu-install_5.4.50400-1_all.deb
-RUN apt-get -y install ./amdgpu-install_5.4.50400-1_all.deb
-RUN DEBIAN_FRONTEND=noninteractive amdgpu-install --accept-eula -y --usecase=rocm,hiplibsdk --no-dkms  --allow-unauthenticated
+# Download and import the GPG key for the repository
+RUN mkdir --parents --mode=0755 /etc/apt/keyrings
+RUN wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
+    gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null
+RUN echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/debian jammy main' | tee /etc/apt/sources.list.d/rocm.list \
+    && echo 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600\n' | tee /etc/apt/preferences.d/rocm-pin-600
+
+RUN apt update && apt install -y rocm-hip-libraries
+RUN apt-get install -y hsa-amd-aqlprofile hsa-rocr-dev hsakmt-roct-dev && \
+    apt-get install -y hip-base hip-runtime-amd hip-dev && \
+    apt-get install -y rocm-llvm rocm-core rocm-smi-lib rocm-device-libs && \
+    apt-get install -y roctracer-dev rocprofiler-dev rccl-dev
 
 # Set environment variables
 ENV PATH="$PATH:/opt/rocm/bin:/opt/rocm/rocprofiler/bin:/opt/rocm/hip/bin"
@@ -24,7 +39,7 @@ ENV LD_LIBRARY_PATH="/opt/rocm/lib:/opt/rocm/llvm/lib:/opt/rocm/hip/lib"
 
 # Install cmake
 ARG CMAKE_VERSION=3.25.1
-RUN wget https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.sh &&\
+RUN wget --no-check-certificate https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.sh &&\
     chmod +x cmake-${CMAKE_VERSION}-linux-x86_64.sh &&\
     mkdir /opt/cmake && \
     ./cmake-${CMAKE_VERSION}-linux-x86_64.sh  --skip-license --prefix=/opt/cmake  &&\
@@ -35,3 +50,6 @@ RUN locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8 \
     LANGUAGE=en_US:en \
     LC_ALL=en_US.UTF-8
+
+RUN mkdir /root/.ssh/
+RUN chmod 700 /root/.ssh/
