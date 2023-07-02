@@ -1,2 +1,2 @@
 # docker build -t cuda -f ubuntu/Dockerfile .
-docker buildx  build --platform linux/amd64 --progress plain -t cuda -f ubuntu/Dockerfile.nvidia .
+docker buildx  build --platform linux/amd64  -t cuda -f ubuntu/Dockerfile.nvidia .
