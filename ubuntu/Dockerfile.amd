@@ -1,54 +1,71 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 LABEL maintainer="Muhammad Awad <mawad@duck.com>"
 
-# Install dependencies
-RUN apt-get update && apt-get -y install wget build-essential git python-is-python3 libstdc++-12-dev
-RUN apt-get -y install libxml2 # I think this is a requirement for ROCm
-ARG ROCM_VERSION=5.6.1
-RUN mkdir --parents --mode=0755 /etc/apt/keyrings &&\
-    wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Add ROCm repositories to sources.list.d
-RUN for ver in 5.3.3 5.4.6 5.5.3 5.6.1; do \
-    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/$ver jammy main" \
-    | tee -a /etc/apt/sources.list.d/rocm.list; \
-    done
+# Install required Ubuntu packages
+RUN apt-get clean && \
+    apt-get update -y && \
+    apt-get install -y --no-install-recommends \
+    wget \
+    git \
+    build-essential \
+    graphviz \
+    python-is-python3 \
+    locales \
+    libboost-dev \
+    openssh-client \
+    ca-certificates \
+    libxml2-dev \
+    gpg
 
-# Set the pin priority for ROCm repositories
-RUN echo 'Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600' \
-    | tee /etc/apt/preferences.d/rocm-pin-600 &&\
-    apt update
+# Install ROCm
+# Make the directory if it doesn't exist yet
+RUN mkdir --parents --mode=0755 /etc/apt/keyrings
 
-RUN apt install -y rocm-hip-sdk
+# Download the key, convert the signing-key to a full keyring required by apt
+RUN wget https://repo.radeon.com/rocm/rocm.gpg.key -O - | \
+    gpg --dearmor | tee /etc/apt/keyrings/rocm.gpg > /dev/null
+
+# Add AMD GPU repository
+RUN echo "deb [arch=amd64,i386 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/amdgpu/6.3.3/ubuntu noble main" \
+    | tee /etc/apt/sources.list.d/amdgpu.list
+
+# Update package list
+RUN apt-get update
+
+# Add ROCm repository
+RUN echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/rocm.gpg] https://repo.radeon.com/rocm/apt/6.3.3 noble main" \
+    | tee --append /etc/apt/sources.list.d/rocm.list
+
+# Set package priority
+RUN printf "Package: *\nPin: release o=repo.radeon.com\nPin-Priority: 600\n" > /etc/apt/preferences.d/rocm-pin-600
+
+# Update and install ROCm
+RUN apt-get update && \
+    apt-get install -y rocm
 
 # Set environment variables
 ENV PATH="$PATH:/opt/rocm/bin:/opt/rocm/rocprofiler/bin:/opt/rocm/hip/bin"
 ENV LD_LIBRARY_PATH="/opt/rocm/lib:/opt/rocm/llvm/lib:/opt/rocm/hip/lib"
 
 # Install CMake
-ARG CMAKE_VERSION=3.24.2
-RUN wget https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.sh &&\
+ARG CMAKE_VERSION=3.25.1
+RUN wget --no-check-certificate https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.sh &&\
     chmod +x cmake-${CMAKE_VERSION}-linux-x86_64.sh &&\
     mkdir /opt/cmake && \
     ./cmake-${CMAKE_VERSION}-linux-x86_64.sh  --skip-license --prefix=/opt/cmake  &&\
     ln -s /opt/cmake/bin/* /usr/local/bin/
 
-# Install Omniperf
-RUN apt-get -y install python3-pip
-ARG OMNIPERF_VERSION=1.0.10
-ARG INSTALL_DIR=/opt/omniperf/
-RUN wget https://github.com/AMDResearch/omniperf/releases/download/v${OMNIPERF_VERSION}/omniperf-v${OMNIPERF_VERSION}.tar.gz &&\
-    tar xfz omniperf-v${OMNIPERF_VERSION}.tar.gz &&\
-    cd omniperf-${OMNIPERF_VERSION} &&\
-    python3 -m pip install -t ${INSTALL_DIR}/python-libs -r requirements.txt &&\
-    mkdir build && cd build &&\
-    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}/${OMNIPERF_VERSION} \
-    -DPYTHON_DEPS=${INSTALL_DIR}/python-libs \
-    -DMOD_INSTALL_PATH=${INSTALL_DIR}/modulefiles .. &&\
-    make install
+# Set the locale
+RUN locale-gen en_US.UTF-8
+ENV LANG=en_US.UTF-8 \
+    LANGUAGE=en_US:en \
+    LC_ALL=en_US.UTF-8
 
-# Set enviroment varlaibles
-ENV PATH="$INSTALL_DIR/${OMNIPERF_VERSION}/bin:$PATH"
-ENV PYTHONPATH="$INSTALL_DIR/python-libs"
+RUN mkdir -p /root/.ssh/
+RUN chmod 700 /root/.ssh/
 
-RUN apt-get -y install rocm-developer-tools
+# Install dev tools
+RUN apt-get install -y gdb \
+                rocm-llvm-dev

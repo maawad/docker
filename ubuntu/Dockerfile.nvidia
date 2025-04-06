@@ -1,9 +1,7 @@
 FROM ubuntu:latest
 
-ENV DEBIAN_FRONTEND noninteractive
-
 # Install required Ubuntu packages
-RUN apt-get clean && \
+RUN DEBIAN_FRONTEND=noninteractive apt-get clean && \
     apt-get update -y -qq && \
     apt-get install -y --no-install-recommends \
     wget \
@@ -15,14 +13,13 @@ RUN apt-get clean && \
     libboost-dev
 
 # Install CUDA
-ARG CUDA_DEB=cuda-repo-ubuntu2204-12-3-local_12.3.1-545.23.08-1_amd64.deb
 RUN wget --no-check-certificate https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
 RUN  mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
-RUN wget --no-check-certificate https://developer.download.nvidia.com/compute/cuda/12.3.1/local_installers/${CUDA_DEB}
-RUN dpkg -i ${CUDA_DEB}
-RUN cp /var/cuda-repo-ubuntu2204-12-3-local/cuda-*-keyring.gpg /usr/share/keyrings/
-RUN sudo apt-get update
-RUN sudo apt-get -y install cuda-toolkit-12-3
+RUN wget --no-check-certificate https://developer.download.nvidia.com/compute/cuda/12.1.1/local_installers/cuda-repo-ubuntu2204-12-1-local_12.1.1-530.30.02-1_amd64.deb
+RUN  dpkg -i cuda-repo-ubuntu2204-12-1-local_12.1.1-530.30.02-1_amd64.deb
+RUN  cp /var/cuda-repo-ubuntu2204-12-1-local/cuda-*-keyring.gpg /usr/share/keyrings/
+RUN  apt-get update
+RUN  apt-get -y install cuda
 
 # Install cmake
 ARG CMAKE_VERSION=3.25.1
